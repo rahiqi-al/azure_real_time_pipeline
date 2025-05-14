@@ -103,7 +103,7 @@ resource "azurerm_cognitive_account" "rtpipeline_text_analytics" {
   resource_group_name = data.azurerm_resource_group.rtpipeline_rg.name
   location            = data.azurerm_resource_group.rtpipeline_rg.location
   kind                = "TextAnalytics"
-  sku_name            = "F0"
+  sku_name            = "S"
 }
 
 # Logic Apps
