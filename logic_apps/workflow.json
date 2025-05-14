@@ -1,0 +1,127 @@
+{
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "eventHubConnectionString": {
+          "defaultValue": "Endpoint=sb://rtpipeline-eh-ns.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=hsuNt4RBIOTpH+oqwgOU2Ibr4iVN40tp8+AEhNXQ2gI=",
+          "type": "String"
+        },
+        "functionProcessReviewsUrl": {
+          "defaultValue": "https://rtpipeline-fn.azurewebsites.net/api/process_reviews?code=RASeJ-dU7bj8NcPea75w4dksNVcr09HBN6NqbydQ0z9HAzFuC6T6RA==",
+          "type": "String"
+        },
+        "functionSlackNotificationUrl": {
+          "defaultValue": "https://rtpipeline-fn.azurewebsites.net/api/slack_notification?code=898_xjQAksq9-wkL7kU3YKI3e90mVboV7bYk-_54madXAzFum4Rb_g==",
+          "type": "String"
+        }
+      },
+      "triggers": {
+        "When_events_are_available_in_Event_Hub": {
+          "type": "ApiConnection",
+          "recurrence": {
+            "frequency": "Second",
+            "interval": 30
+          },
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('eventHubConnectionString')"
+              }
+            },
+            "method": "get",
+            "path": "/subscriptions/@{encodeURIComponent('59b3f2eb-caba-469e-afca-cde678d49c24')}/resourceGroups/arahiqi/providers/Microsoft.EventHub/namespaces/rtpipeline-eh-ns/eventhubs/rtpipeline-eh/messages",
+            "queries": {
+              "consumerGroup": "$Default",
+              "maxCount": 10
+            }
+          }
+        }
+      },
+      "actions": {
+        "Parse_Review": {
+          "runAfter": {},
+          "type": "ParseJson",
+          "inputs": {
+            "content": "@triggerBody()",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "review_id": { "type": "string" },
+                "airline": { "type": "string" },
+                "reviewer": { "type": "string" },
+                "rating": { "type": "integer" },
+                "date": { "type": "string" },
+                "title": { "type": "string" },
+                "body": { "type": "string" }
+              }
+            }
+          }
+        },
+        "Call_Process_Reviews_Function": {
+          "runAfter": {
+            "Parse_Review": ["Succeeded"]
+          },
+          "type": "Http",
+          "inputs": {
+            "method": "POST",
+            "uri": "@parameters('functionProcessReviewsUrl')",
+            "body": "@body('Parse_Review')"
+          }
+        },
+        "Parse_Processed_Review": {
+          "runAfter": {
+            "Call_Process_Reviews_Function": ["Succeeded"]
+          },
+          "type": "ParseJson",
+          "inputs": {
+            "content": "@body('Call_Process_Reviews_Function')",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "review_id": { "type": "string" },
+                "airline": { "type": "string" },
+                "reviewer": { "type": "string" },
+                "rating": { "type": "integer" },
+                "date": { "type": "string" },
+                "title": { "type": "string" },
+                "body": { "type": "string" },
+                "sentiment": { "type": "string" }
+              }
+            }
+          }
+        },
+        "Check_Sentiment": {
+          "runAfter": {
+            "Parse_Processed_Review": ["Succeeded"]
+          },
+          "type": "If",
+          "expression": {
+            "equals": ["@body('Parse_Processed_Review')?['sentiment']", "negative"]
+          },
+          "actions": {
+            "Call_Slack_Notification_Function": {
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "@parameters('functionSlackNotificationUrl')",
+                "body": "@body('Parse_Processed_Review')"
+              }
+            }
+          }
+        }
+      },
+      "outputs": {}
+    },
+    "parameters": {
+      "eventHubConnectionString": {
+        "value": "Endpoint=sb://rtpipeline-eh-ns.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=hsuNt4RBIOTpH+oqwgOU2Ibr4iVN40tp8+AEhNXQ2gI="
+      },
+      "functionProcessReviewsUrl": {
+        "value": "https://rtpipeline-fn.azurewebsites.net/api/process_reviews?code=RASeJ-dU7bj8NcPea75w4dksNVcr09HBN6NqbydQ0z9HAzFuC6T6RA=="
+      },
+      "functionSlackNotificationUrl": {
+        "value": "https://rtpipeline-fn.azurewebsites.net/api/slack_notification?code=898_xjQAksq9-wkL7kU3YKI3e90mVboV7bYk-_54madXAzFum4Rb_g=="
+      }
+    }
+  }
